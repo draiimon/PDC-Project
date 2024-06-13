@@ -1,8 +1,6 @@
 import com.formdev.flatlaf.FlatDarkLaf;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -13,8 +11,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.StringTokenizer;
 
 public class MoodSyncApp {
     private JFrame frame;
@@ -28,7 +25,7 @@ public class MoodSyncApp {
     private Map<String, ArrayList<String>> historyMap;
     private ImageIcon userIcon;
     private ImageIcon botIcon;
-    private ExecutorService executorService;
+    private final String WELCOME_MESSAGE = "Hello! I'm MoodSync, your emotional assistant. How are you feeling today?";
 
     public MoodSyncApp() {
         FlatDarkLaf.install();
@@ -37,15 +34,14 @@ public class MoodSyncApp {
         historyListModel = new DefaultListModel<>();
         conversationContext = new JTextArea();
         userIcon = new ImageIcon("C:\\Users\\andre\\MoodSyncApp\\andrei.jpg");
-        botIcon = new ImageIcon("C:\\Users\\andre\\MoodSyncApp\\andrei.jpg");
-        executorService = Executors.newFixedThreadPool(2); // Using 2 threads for simplicity
+        botIcon = new ImageIcon("path/to/bot_icon.jpg");
         initializeUI();
     }
 
     private void initializeUI() {
         frame = new JFrame("MoodSync App");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(1200, 800); // Increased the size of the GUI
+        frame.setSize(1200, 800);
         frame.setLayout(new BorderLayout());
 
         JTabbedPane tabbedPane = new JTabbedPane();
@@ -54,6 +50,8 @@ public class MoodSyncApp {
 
         frame.add(tabbedPane, BorderLayout.CENTER);
         frame.setVisible(true);
+
+        startNewConversation(); // Start a new conversation initially when the app starts
     }
 
     private JPanel createChatbotPanel() {
@@ -85,14 +83,13 @@ public class MoodSyncApp {
 
         historyList = new JList<>(historyListModel);
         historyList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        historyList.addListSelectionListener(new ListSelectionListener() {
-            @Override
-            public void valueChanged(ListSelectionEvent e) {
-                if (!e.getValueIsAdjusting()) {
-                    loadSelectedConversation();
-                }
+        historyList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                saveCurrentConversation();
+                loadSelectedConversation();
             }
         });
+        historyList.setCellRenderer(new CustomHistoryListRenderer());
         JScrollPane historyScrollPane = new JScrollPane(historyList);
         historyScrollPane.setBorder(BorderFactory.createTitledBorder("History"));
         historyScrollPane.setPreferredSize(new Dimension(250, 0));
@@ -100,7 +97,10 @@ public class MoodSyncApp {
 
         JButton newChatButton = new JButton("New Chat");
         newChatButton.setFont(new Font("Arial", Font.PLAIN, 16));
-        newChatButton.addActionListener(e -> autoSaveCurrentConversation());
+        newChatButton.addActionListener(e -> {
+            saveCurrentConversation();
+            startNewConversation();
+        });
 
         JPanel newChatPanel = new JPanel(new BorderLayout());
         newChatPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -108,7 +108,18 @@ public class MoodSyncApp {
 
         mainPanel.add(newChatPanel, BorderLayout.NORTH);
 
+        addContextMenuToHistoryList();
+
         return mainPanel;
+    }
+
+    private void startNewConversation() {
+        chatHistory.clear();
+        currentTitle = null;
+        chatPanel.removeAll();
+        conversationContext.setText("");
+        displayMessage("MoodSync Bot", WELCOME_MESSAGE, false);
+        chatHistory.add("MoodSync Bot: " + WELCOME_MESSAGE);
     }
 
     private void loadSelectedConversation() {
@@ -135,20 +146,21 @@ public class MoodSyncApp {
         public void actionPerformed(ActionEvent e) {
             String userMessage = userInputField.getText().trim();
             if (!userMessage.isEmpty()) {
+                if (currentTitle == null) {
+                    currentTitle = generateTitleFromMessage(userMessage);
+                    historyListModel.addElement(currentTitle);
+                }
                 displayMessage("You", userMessage, true);
                 chatHistory.add("You: " + userMessage);
                 userInputField.setText("");
                 String conversationContextText = conversationContext.getText() + " " + userMessage;
-                executorService.submit(() -> {
-                    String botResponse = APIClient.getChatbotResponse(conversationContextText);
-                    SwingUtilities.invokeLater(() -> {
-                        displayMessage("MoodSync Bot", botResponse, false);
-                        chatHistory.add("MoodSync Bot: " + botResponse);
-                        conversationContext.append("You: " + userMessage + "\nMoodSync Bot: " + botResponse + "\n");
-                        JScrollBar vertical = ((JScrollPane) chatPanel.getParent().getParent()).getVerticalScrollBar();
-                        vertical.setValue(vertical.getMaximum());
-                    });
-                });
+                // Get response from AI API
+                String botResponse = APIClient.getChatbotResponse(conversationContextText);
+                displayMessage("MoodSync Bot", botResponse, false);
+                chatHistory.add("MoodSync Bot: " + botResponse);
+                conversationContext.append("You: " + userMessage + "\nMoodSync Bot: " + botResponse + "\n");
+                JScrollBar vertical = ((JScrollPane) chatPanel.getParent().getParent()).getVerticalScrollBar();
+                vertical.setValue(vertical.getMaximum());
             }
         }
     }
@@ -156,12 +168,14 @@ public class MoodSyncApp {
     private void displayMessage(String sender, String message, boolean isUser) {
         JPanel messagePanel = new JPanel(new BorderLayout());
         messagePanel.setOpaque(false);
-    
+
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
-        JLabel messageLabel = new JLabel("<html><div style='width: auto; max-width: 250px;'><b>" + sender + "</b><br><small>" + timestamp + "</small><br>" + message + "</div></html>");
-        messageLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        JLabel messageLabel = new JLabel("<html><div style='width: auto; max-width: 250px;'><b style='color:darkblue;'>"
+                + sender + "</b><br><small>" + timestamp + "</small><br>"
+                + message.replaceAll("(\r\n|\n)", "<br>") + "</div></html>");
+        messageLabel.setFont(new Font("Arial", Font.BOLD, 14));
         messageLabel.setForeground(Color.WHITE);
-    
+
         JPanel bubblePanel = new JPanel(new BorderLayout()) {
             @Override
             protected void paintComponent(Graphics g) {
@@ -177,7 +191,7 @@ public class MoodSyncApp {
                 g2.fillRoundRect(0, 0, width - 1, height - 1, 30, 30);
                 g2.dispose();
             }
-    
+
             @Override
             public Dimension getPreferredSize() {
                 Dimension dim = super.getPreferredSize();
@@ -187,37 +201,33 @@ public class MoodSyncApp {
         };
         bubblePanel.setBorder(new EmptyBorder(10, 10, 10, 10));
         bubblePanel.add(messageLabel, BorderLayout.CENTER);
-    
+
         JPanel alignedMessagePanel = new JPanel(new BorderLayout());
         alignedMessagePanel.setOpaque(false);
-    
-        // Create a panel for the icon and bubble
+
         JPanel iconAndBubblePanel = new JPanel(new BorderLayout());
-    
+
         JLabel userPicture = new JLabel("", JLabel.CENTER);
         userPicture.setIcon(new ImageIcon(getScaledRoundImage(isUser ? userIcon.getImage() : botIcon.getImage(), 40)));
-    
+
         if (isUser) {
-            // User message alignment: icon on the left, bubble on the right
             iconAndBubblePanel.add(userPicture, BorderLayout.WEST);
             iconAndBubblePanel.add(bubblePanel, BorderLayout.CENTER);
-            alignedMessagePanel.add(iconAndBubblePanel, BorderLayout.WEST); // Align to the left edge of chat panel
+            alignedMessagePanel.add(iconAndBubblePanel, BorderLayout.WEST);
         } else {
-            // Bot message alignment: bubble on the left, icon on the right
             iconAndBubblePanel.add(bubblePanel, BorderLayout.CENTER);
             iconAndBubblePanel.add(userPicture, BorderLayout.EAST);
-            alignedMessagePanel.add(iconAndBubblePanel, BorderLayout.EAST); // Align to the right edge of chat panel
+            alignedMessagePanel.add(iconAndBubblePanel, BorderLayout.EAST);
         }
-    
+
         chatPanel.add(alignedMessagePanel);
         chatPanel.add(Box.createVerticalStrut(5));
         chatPanel.revalidate();
         chatPanel.repaint();
-    
+
         JScrollBar vertical = ((JScrollPane) chatPanel.getParent().getParent()).getVerticalScrollBar();
         vertical.setValue(vertical.getMaximum());
     }
-    
 
     private Image getScaledRoundImage(Image srcImg, int size) {
         BufferedImage resizedImg = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
@@ -229,30 +239,80 @@ public class MoodSyncApp {
         return resizedImg;
     }
 
-    private void autoSaveCurrentConversation() {
+    private void saveCurrentConversation() {
         if (!chatHistory.isEmpty()) {
-            String title = currentTitle != null ? currentTitle : generateTitle(chatHistory.get(0));
-            historyMap.put(title, new ArrayList<>(chatHistory));
-            if (!historyListModel.contains(title)) {
-                historyListModel.addElement(title);
+            if (currentTitle == null) {
+                currentTitle = generateTitleFromMessage(chatHistory.get(1)); // Use the first user message for title
             }
-            chatHistory.clear();
-            chatPanel.removeAll();
-            chatPanel.revalidate();
-            chatPanel.repaint();
-            conversationContext.setText("");
-            currentTitle = null;
+            historyMap.put(currentTitle, new ArrayList<>(chatHistory));
+            if (!historyListModel.contains(currentTitle)) {
+                historyListModel.addElement(currentTitle);
+            }
         }
     }
 
-    private String generateTitle(String initialMessage) {
-        // Improved title generation using keyword extraction
-        String[] words = initialMessage.split(" ");
-        StringBuilder titleBuilder = new StringBuilder("Chat: ");
-        for (int i = 0; i < Math.min(words.length, 5); i++) {
-            titleBuilder.append(words[i]).append(" ");
+    private String generateTitleFromMessage(String message) {
+        StringTokenizer tokenizer = new StringTokenizer(message, " ");
+        StringBuilder titleBuilder = new StringBuilder();
+        int wordCount = 0;
+
+        while (tokenizer.hasMoreTokens() && wordCount < 5) {
+            titleBuilder.append(tokenizer.nextToken()).append(" ");
+            wordCount++;
         }
-        return titleBuilder.toString().trim() + "...";
+
+        return titleBuilder.toString().trim();
+    }
+
+    private class CustomHistoryListRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            label.setOpaque(true);
+            label.setBorder(new EmptyBorder(10, 10, 10, 10));
+            label.setFont(new Font("Arial", Font.BOLD, 14));
+            label.setForeground(Color.WHITE);
+            label.setBackground(isSelected ? Color.GRAY : Color.DARK_GRAY);
+
+            return label;
+        }
+    }
+
+    private void addContextMenuToHistoryList() {
+        JPopupMenu contextMenu = new JPopupMenu();
+        JMenuItem renameItem = new JMenuItem("Rename");
+        JMenuItem deleteItem = new JMenuItem("Delete");
+
+        renameItem.addActionListener(e -> renameSelectedConversation());
+        deleteItem.addActionListener(e -> deleteSelectedConversation());
+
+        contextMenu.add(renameItem);
+        contextMenu.add(deleteItem);
+
+        historyList.setComponentPopupMenu(contextMenu);
+    }
+
+    private void renameSelectedConversation() {
+        String selectedTitle = historyList.getSelectedValue();
+        if (selectedTitle != null) {
+            String newTitle = JOptionPane.showInputDialog(frame, "Enter new title:", selectedTitle);
+            if (newTitle != null && !newTitle.trim().isEmpty()) {
+                ArrayList<String> conversation = historyMap.remove(selectedTitle);
+                historyMap.put(newTitle, conversation);
+                historyListModel.setElementAt(newTitle, historyList.getSelectedIndex());
+            }
+        }
+    }
+
+    private void deleteSelectedConversation() {
+        String selectedTitle = historyList.getSelectedValue();
+        if (selectedTitle != null) {
+            int response = JOptionPane.showConfirmDialog(frame, "Are you sure you want to delete this conversation?", "Confirm", JOptionPane.YES_NO_OPTION);
+            if (response == JOptionPane.YES_OPTION) {
+                historyMap.remove(selectedTitle);
+                historyListModel.removeElement(selectedTitle);
+            }
+        }
     }
 
     public static void main(String[] args) {
