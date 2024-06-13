@@ -200,7 +200,7 @@ public class MoodSyncApp {
 
             // Start countdown timer
             timer = new Timer(1000, new ActionListener() {
-                int remainingSeconds = 29;
+                double remainingSeconds = 26.5;
 
                 @Override
                 public void actionPerformed(ActionEvent e) {
@@ -238,8 +238,7 @@ public class MoodSyncApp {
                 "nigga", "nigra", 
                 "pigfucker", "piss", "prick", "pussy", 
                 "shit", "shit ass", "shite", "sibling fucker", "sisterfuck", "sisterfucker", "slut", "son of a whore", "son of a bitch", "spastic", "sweet Jesus", 
-                "twat", 
-                "wanker", "putangina mo", "puta", "gago", "sibling tangina", "tanga", "sisterfucker"
+                "twat", "wanker", "putangina mo", "puta", "gago", "sibling tangina", "tanga", "sisterfucker"
             };
             for (String badWord : badWords) {
                 if (message.toLowerCase().contains(badWord)) {
