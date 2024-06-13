@@ -1,4 +1,5 @@
 import com.formdev.flatlaf.FlatDarkLaf;
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -54,7 +55,7 @@ public class MoodSyncApp {
         startNewConversation(); // Start a new conversation initially when the app starts
     }
 
-    private JPanel createChatbotPanel() {
+    public JPanel createChatbotPanel() {
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBackground(Color.DARK_GRAY);
 
@@ -75,7 +76,7 @@ public class MoodSyncApp {
         userInputField.setForeground(Color.WHITE);
         JButton sendButton = new JButton("Send");
         sendButton.setFont(new Font("Arial", Font.PLAIN, 16));
-        sendButton.addActionListener(new SendButtonListener());
+        sendButton.addActionListener(new SendButtonListener(frame)); // Pass the JFrame instance to the listener
 
         inputPanel.add(userInputField, BorderLayout.CENTER);
         inputPanel.add(sendButton, BorderLayout.EAST);
@@ -141,27 +142,111 @@ public class MoodSyncApp {
         }
     }
 
-    private class SendButtonListener implements ActionListener {
+    public class SendButtonListener implements ActionListener {
+        private boolean banned = false;
+        private long banEndTime = 0;
+        private Timer timer;
+        private JFrame frame;
+
+        // Constructor with JFrame parameter
+        public SendButtonListener(JFrame frame) {
+            this.frame = frame;
+        }
+
         @Override
         public void actionPerformed(ActionEvent e) {
+            if (banned && System.currentTimeMillis() < banEndTime) {
+                JOptionPane.showMessageDialog(frame, getBannedMessage());
+                return;
+            }
+
             String userMessage = userInputField.getText().trim();
             if (!userMessage.isEmpty()) {
                 if (currentTitle == null) {
                     currentTitle = generateTitleFromMessage(userMessage);
                     historyListModel.addElement(currentTitle);
                 }
+
+                boolean containsBadWord = checkForBadWords(userMessage);
+
+                if (containsBadWord) {
+                    displayMessage("MoodSync Bot", "Sorry, you used a banned word!", false);
+                    banUser();
+                    return; // Exit if banned due to bad words
+                }
+
                 displayMessage("You", userMessage, true);
                 chatHistory.add("You: " + userMessage);
                 userInputField.setText("");
                 String conversationContextText = conversationContext.getText() + " " + userMessage;
-                // Get response from AI API
+
                 String botResponse = APIClient.getChatbotResponse(conversationContextText);
+
                 displayMessage("MoodSync Bot", botResponse, false);
                 chatHistory.add("MoodSync Bot: " + botResponse);
                 conversationContext.append("You: " + userMessage + "\nMoodSync Bot: " + botResponse + "\n");
+
                 JScrollBar vertical = ((JScrollPane) chatPanel.getParent().getParent()).getVerticalScrollBar();
                 vertical.setValue(vertical.getMaximum());
             }
+        }
+
+        private void banUser() {
+            banned = true;
+            banEndTime = System.currentTimeMillis() + 30 * 1000; // 30 seconds ban
+
+            // Show countdown dialog
+            JOptionPane.showMessageDialog(frame, getBannedMessage());
+
+            // Start countdown timer
+            timer = new Timer(1000, new ActionListener() {
+                int remainingSeconds = 29;
+
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    remainingSeconds--;
+                    if (remainingSeconds > 0) {
+                        JOptionPane.showMessageDialog(frame, getBannedMessage());
+                    } else {
+                        ((Timer) e.getSource()).stop();
+                        banned = false;
+                    }
+                }
+            });
+            timer.start();
+        }
+
+        private String getBannedMessage() {
+            int remainingSeconds = (int) Math.max(0, (banEndTime - System.currentTimeMillis()) / 1000);
+            return "<html><div style='width: 200px;'><font color='red'><b><big>You are banned for "
+                    + remainingSeconds + " seconds.</big></b></font></div></html>";
+        }
+
+        private boolean checkForBadWords(String message) {
+            String[] badWords = {
+                "arse", "arsehead", "arsehole", "ass", "ass hole", "asshole", 
+                "bastard", "bitch", "bloody", "bollocks", "brotherfucker", "bugger", "bullshit", 
+                "child-fucker", "Christ on a bike", "Christ on a cracker", "cock", "cocksucker", "crap", "cunt", 
+                "dammit", "damn", "damn it", "damned", "dick", "dick-head", "dickhead", "dumb ass", "dumb-ass", "dumbass", "dyke", 
+                "father-fucker", "fatherfucker", "frigger", "fuck", "fucker", "fucking", 
+                "god dammit", "God damn", "god damn", "goddammit", "goddamn", "Goddamn", "goddamned", "goddamnit", "godsdamn", 
+                 "holy shit", "horseshit", 
+                "in shit", 
+                "jack-ass", "jackarse", "jackass", "Jesus Christ", "Jesus fuck", "Jesus H. Christ", "Jesus Harold Christ", "Jesus, Mary and Joseph", "Jesus wept", 
+                "kike", 
+                "mother fucker", "mother-fucker", "motherfucker", 
+                "nigga", "nigra", 
+                "pigfucker", "piss", "prick", "pussy", 
+                "shit", "shit ass", "shite", "sibling fucker", "sisterfuck", "sisterfucker", "slut", "son of a whore", "son of a bitch", "spastic", "sweet Jesus", 
+                "twat", 
+                "wanker", "putangina mo", "puta", "gago", "sibling tangina", "tanga", "sisterfucker"
+            };
+            for (String badWord : badWords) {
+                if (message.toLowerCase().contains(badWord)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
