@@ -28,6 +28,7 @@ public class MoodSyncApp {
     private ImageIcon botIcon;
     private final String WELCOME_MESSAGE = "Hello! I'm MoodSync, your emotional assistant. How are you feeling today?";
 
+    @SuppressWarnings("deprecation")
     public MoodSyncApp() {
         FlatDarkLaf.install();
         chatHistory = new ArrayList<>();
@@ -44,7 +45,7 @@ public class MoodSyncApp {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(1200, 800);
         frame.setLayout(new BorderLayout());
-
+        frame.setLocationRelativeTo(null);
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Mood Tracker", new JPanel());
         tabbedPane.addTab("Chatbot", createChatbotPanel());
@@ -238,7 +239,7 @@ public class MoodSyncApp {
                 "nigga", "nigra", 
                 "pigfucker", "piss", "prick", "pussy", 
                 "shit", "shit ass", "shite", "sibling fucker", "sisterfuck", "sisterfucker", "slut", "son of a whore", "son of a bitch", "spastic", "sweet Jesus", 
-                "twat", "wanker", "putangina mo", "puta", "gago", "sibling tangina", "tanga", "sisterfucker"
+                "twat", "wanker", "putangina mo", "puta", "gago", "sibling tangina", "tanga", "sisterfucker","bobo" ,"tangina mo"
             };
             for (String badWord : badWords) {
                 if (message.toLowerCase().contains(badWord)) {
